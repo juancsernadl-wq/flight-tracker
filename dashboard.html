@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>✈️ Flight Price Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, sans-serif;
+      background: #f5f5f7;
+      margin: 0;
+      padding: 24px;
+      color: #1d1d1f;
+    }
+    h1 { font-size: 1.6rem; margin-bottom: 4px; }
+    .subtitle { color: #666; margin-bottom: 32px; font-size: 0.95rem; }
+    .cards {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+    }
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px 24px;
+      flex: 1;
+      min-width: 160px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    .card .label { font-size: 0.8rem; color: #888; margin-bottom: 6px; }
+    .card .value { font-size: 1.6rem; font-weight: 600; }
+    .card .value.green { color: #34c759; }
+    .card .value.red   { color: #ff3b30; }
+    .chart-box {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      margin-bottom: 24px;
+    }
+    .table-box {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th { text-align: left; padding: 8px 12px; color: #888; font-weight: 500;
+         border-bottom: 1px solid #eee; }
+    td { padding: 10px 12px; border-bottom: 1px solid #f5f5f5; }
+    tr:last-child td { border-bottom: none; }
+    .alert-banner {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      border-radius: 10px;
+      padding: 14px 20px;
+      margin-bottom: 24px;
+      font-size: 0.95rem;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>✈️ LAX → AGU Price Tracker</h1>
+  <p class="subtitle">Checks automatically on Tue, Wed & Fri • Direct flights only</p>
+
+  <div class="alert-banner" id="alertBanner"></div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="label">Best Price Found</div>
+      <div class="value green" id="bestPrice">—</div>
+    </div>
+    <div class="card">
+      <div class="label">Best Date</div>
+      <div class="value" id="bestDate" style="font-size:1.1rem;padding-top:6px;">—</div>
+    </div>
+    <div class="card">
+      <div class="label">Last Checked</div>
+      <div class="value" id="lastChecked" style="font-size:1rem;padding-top:6px;">—</div>
+    </div>
+    <div class="card">
+      <div class="label">Total Checks</div>
+      <div class="value" id="totalChecks">—</div>
+    </div>
+  </div>
+
+  <div class="chart-box">
+    <canvas id="priceChart" height="100"></canvas>
+  </div>
+
+  <div class="table-box">
+    <h3 style="margin-top:0;">Recent Results</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Checked At</th>
+          <th>Flight Date</th>
+          <th>Price</th>
+          <th>vs Alert ($250)</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+
+  <script>
+    const ALERT_PRICE = 150;
+    const CSV_FILE = "prices.csv";
+
+    // Parse CSV text into array of objects
+    function parseCSV(text) {
+      const lines = text.trim().split("\n");
+      const headers = lines[0].split(",");
+      return lines.slice(1).map(line => {
+        const vals = line.split(",");
+        return {
+          timestamp: vals[0],
+          date: vals[1],
+          price: parseFloat(vals[2])
+        };
+      });
+    }
+
+    function loadAndRender() {
+      fetch(CSV_FILE + "?t=" + Date.now())
+        .then(r => {
+          if (!r.ok) throw new Error("CSV not found");
+          return r.text();
+        })
+        .then(text => {
+          const rows = parseCSV(text);
+          if (!rows.length) return;
+
+          // Stats
+          const prices = rows.map(r => r.price);
+          const best = Math.min(...prices);
+          const bestRow = rows.find(r => r.price === best);
+          const lastTimestamp = rows[rows.length - 1].timestamp;
+          const uniqueChecks = new Set(rows.map(r => r.timestamp)).size;
+
+          document.getElementById("bestPrice").textContent = `$${best}`;
+          document.getElementById("bestDate").textContent = bestRow.date;
+          document.getElementById("lastChecked").textContent = lastTimestamp;
+          document.getElementById("totalChecks").textContent = uniqueChecks;
+
+          // Alert banner
+          if (best < ALERT_PRICE) {
+            const banner = document.getElementById("alertBanner");
+            banner.style.display = "block";
+            banner.textContent = `💰 Price alert! Best price $${best} on ${bestRow.date} is under your $${ALERT_PRICE} threshold.`;
+          }
+
+          // Chart — group by timestamp, take lowest price per check
+          const byTimestamp = {};
+          rows.forEach(r => {
+            if (!byTimestamp[r.timestamp] || r.price < byTimestamp[r.timestamp]) {
+              byTimestamp[r.timestamp] = r.price;
+            }
+          });
+          const labels = Object.keys(byTimestamp);
+          const data = Object.values(byTimestamp);
+
+          new Chart(document.getElementById("priceChart"), {
+            type: "line",
+            data: {
+              labels,
+              datasets: [{
+                label: "Cheapest Price Found ($)",
+                data,
+                borderColor: "#007aff",
+                backgroundColor: "rgba(0,122,255,0.08)",
+                borderWidth: 2,
+                pointRadius: 5,
+                pointBackgroundColor: "#007aff",
+                fill: true,
+                tension: 0.3
+              }, {
+                label: `Alert Threshold ($${ALERT_PRICE})`,
+                data: labels.map(() => ALERT_PRICE),
+                borderColor: "#ff3b30",
+                borderDash: [6, 4],
+                borderWidth: 1.5,
+                pointRadius: 0,
+                fill: false,
+              }]
+            },
+            options: {
+              responsive: true,
+              plugins: {
+                legend: { position: "top" },
+                title: { display: true, text: "Price History Over Time" }
+              },
+              scales: {
+                y: { beginAtZero: false }
+              }
+            }
+          });
+
+          // Table — most recent first
+          const tbody = document.getElementById("tableBody");
+          [...rows].reverse().slice(0, 50).forEach(r => {
+            const diff = r.price - ALERT_PRICE;
+            const diffText = diff < 0
+              ? `<span style="color:#34c759">▼ $${Math.abs(diff)} below</span>`
+              : `<span style="color:#ff3b30">▲ $${diff} above</span>`;
+            tbody.innerHTML += `
+              <tr>
+                <td>${r.timestamp}</td>
+                <td>${r.date}</td>
+                <td><strong>$${r.price}</strong></td>
+                <td>${diffText}</td>
+              </tr>`;
+          });
+        })
+        .catch(() => {
+          document.querySelector(".subtitle").textContent =
+            "⚠️ No data yet — run tracker.py first to generate prices.csv";
+        });
+    }
+
+    loadAndRender();
+  </script>
+</body>
+</html>
