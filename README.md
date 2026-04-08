@@ -29,13 +29,16 @@ Built as a personal tool to track LAX → AGU (Aguascalientes) flights while lea
 ---
 
 ## Project Structure
+
+```
 flight-tracker/
-├── tracker.py          # One-way flight tracker
-├── tracker_round.py    # Round-trip variant
-├── dashboard.html      # Browser dashboard (Chart.js)
-├── .env                # Credentials (not committed)
-├── prices.csv          # Price history log (not committed)
-└── prices_round.csv    # Round-trip price log (not committed)
+├── tracker.py           # One-way flight tracker
+├── tracker_round.py     # Round-trip variant
+├── dashboard.html       # Browser dashboard (Chart.js)
+├── .env                 # Credentials (not committed)
+├── prices.csv           # Price history log (not committed)
+└── prices_round.csv     # Round-trip price log (not committed)
+```
 
 ---
 
@@ -47,9 +50,11 @@ pip3 install flights python-dotenv
 ```
 
 **2. Create a `.env` file:**
+```
 EMAIL_SENDER=your_gmail@gmail.com
 EMAIL_PASSWORD=your_app_password
 EMAIL_RECEIVER=your_gmail@gmail.com
+```
 > Use a [Gmail App Password](https://myaccount.google.com/apppasswords), not your real password.
 
 **3. Configure your search** in `tracker.py`:
